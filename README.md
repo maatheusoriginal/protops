@@ -2,9 +2,9 @@
 
 Site institucional e comercial multilíngue da Pro-Tops, com páginas específicas para cidades, empreendimentos e a operação internacional Pro-Tops Capital Partners.
 
-## Site publicado
+## Publicação
 
-[protops-empreendimentos.cpcley-100.chatgpt.site](https://protops-empreendimentos.cpcley-100.chatgpt.site)
+O repositório está conectado à Vercel. Cada atualização da branch `main` gera um novo deploy.
 
 ## Principais recursos
 
@@ -14,12 +14,13 @@ Site institucional e comercial multilíngue da Pro-Tops, com páginas específic
 - Área institucional da Pro-Tops Capital Partners
 - Seletor de idioma que mantém o visitante na mesma página
 - Português, inglês, espanhol, francês, alemão e mandarim simplificado
-- Links de WhatsApp contextualizados por idioma e empreendimento
+- Botão flutuante de WhatsApp em todas as páginas, contextualizado por idioma, cidade e empreendimento
 - Layout responsivo para computador, tablet e celular
 - Imagens em WebP e vídeo preparado para carregamento na web
 - Painel administrativo protegido em `/admin`
-- Cadastro de cidades e empreendimentos com 6 idiomas
-- Upload de imagens para Firebase Storage
+- Cadastro em português com tradução automática para os outros 5 idiomas
+- Upload assinado de imagens para a Cloudinary
+- Vídeos por empreendimento via YouTube, Vimeo ou MP4
 - Publicação em tempo real por meio do Cloud Firestore
 
 ## Rotas e idiomas
@@ -50,7 +51,9 @@ Os demais idiomas recebem um prefixo:
 - TypeScript
 - Tailwind CSS 4
 - Vinext e Cloudflare Workers
-- Firebase Authentication, Cloud Firestore e Storage
+- Firebase Authentication e Cloud Firestore
+- Cloudinary para imagens
+- Gemini API para tradução automática
 - Radix UI / shadcn
 - pnpm
 
@@ -60,15 +63,30 @@ O Web SDK já está configurado para o projeto `protops-uberlandia`. A ativaçã
 
 1. Em **Authentication → Sign-in method**, ative **E-mail/senha**.
 2. Em **Authentication → Users**, crie o primeiro usuário administrador e copie o UID dele.
-3. Crie o banco **Cloud Firestore** no modo de produção e ative o **Storage**.
+3. Crie o banco **Cloud Firestore** no modo de produção.
 4. Em **Firestore Database → Rules**, publique o conteúdo de `firestore.rules`.
-5. Em **Storage → Rules**, publique o conteúdo de `storage.rules`.
-6. No Firestore, crie a coleção `admins`; use o UID copiado como ID do documento e adicione os campos `active` (booleano `true`) e `role` (texto `admin`).
-7. Acesse `/admin/login`. No primeiro acesso autorizado, o painel cria automaticamente as cidades e os empreendimentos iniciais no banco.
+5. No Firestore, crie a coleção `admins`; use o UID copiado como ID do documento e adicione os campos `active` (booleano `true`) e `role` (texto `admin`).
+6. Acesse `/admin/login`. No primeiro acesso autorizado, o painel cria automaticamente as cidades e os empreendimentos iniciais no banco.
 
-As configurações públicas do Web SDK não concedem acesso administrativo. Login, permissões e tipos de arquivo são validados pelas regras incluídas no projeto.
+As configurações públicas do Web SDK não concedem acesso administrativo. Login e permissões são validados pelas regras incluídas no projeto.
 
-Os arquivos `firebase.json`, `firestore.indexes.json`, `firestore.rules` e `storage.rules` também ficam prontos para um deploy futuro por CI/CD, caso a equipe adote esse fluxo.
+Os arquivos `firebase.json`, `firestore.indexes.json` e `firestore.rules` também ficam prontos para um deploy futuro por CI/CD, caso a equipe adote esse fluxo.
+
+## Variáveis da Vercel
+
+Cadastre em **Settings → Environment Variables** para Production, Preview e Development:
+
+```text
+CLOUDINARY_CLOUD_NAME
+CLOUDINARY_API_KEY
+CLOUDINARY_API_SECRET
+GEMINI_API_KEY
+```
+
+Opcionalmente, `GEMINI_MODEL` permite substituir o modelo padrão `gemini-3.5-flash-lite`.
+Nunca exponha `CLOUDINARY_API_SECRET` ou `GEMINI_API_KEY` com o prefixo `NEXT_PUBLIC_`.
+
+O painel autentica o administrador antes de gerar a assinatura da Cloudinary ou solicitar traduções. As fotos são enviadas diretamente à Cloudinary e somente suas URLs são salvas no Firestore. O Firebase Storage não é utilizado.
 
 ## Executar localmente
 

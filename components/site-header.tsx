@@ -4,9 +4,9 @@ import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/language-switcher";
 import { getCopy, getWhatsAppUrl, localePath, type Locale } from "@/lib/i18n";
 
-export function SiteHeader({ overlay = false, locale = "pt", currentPath = "/" }: { overlay?: boolean; locale?: Locale; currentPath?: string }) {
+export function SiteHeader({ overlay = false, locale = "pt", currentPath = "/", whatsappHref }: { overlay?: boolean; locale?: Locale; currentPath?: string; whatsappHref?: string }) {
   const copy = getCopy(locale);
-  const whatsappUrl = getWhatsAppUrl(locale);
+  const whatsappUrl = whatsappHref ?? getWhatsAppUrl(locale);
   return (
     <header className={`site-header ${overlay ? "site-header-overlay" : ""}`}>
       <div className="site-shell header-inner">

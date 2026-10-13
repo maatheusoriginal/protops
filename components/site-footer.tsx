@@ -2,9 +2,9 @@ import Link from "next/link";
 import { Camera, MessageCircle } from "lucide-react";
 import { getCopy, getWhatsAppUrl, localePath, type Locale } from "@/lib/i18n";
 
-export function SiteFooter({ locale = "pt" }: { locale?: Locale }) {
+export function SiteFooter({ locale = "pt", whatsappHref }: { locale?: Locale; whatsappHref?: string }) {
   const copy = getCopy(locale);
-  const whatsappUrl = getWhatsAppUrl(locale);
+  const whatsappUrl = whatsappHref ?? getWhatsAppUrl(locale);
   return (
     <footer className="site-footer">
       <div className="site-shell footer-grid">

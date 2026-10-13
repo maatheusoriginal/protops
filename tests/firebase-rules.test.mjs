@@ -16,18 +16,12 @@ import {
   Timestamp,
   where,
 } from "firebase/firestore";
-import { getBytes, ref, uploadBytes } from "firebase/storage";
-
 const projectId = "demo-protops";
-const [firestoreRules, storageRules] = await Promise.all([
-  fs.readFile(new URL("../firestore.rules", import.meta.url), "utf8"),
-  fs.readFile(new URL("../storage.rules", import.meta.url), "utf8"),
-]);
+const firestoreRules = await fs.readFile(new URL("../firestore.rules", import.meta.url), "utf8");
 
 const environment = await initializeTestEnvironment({
   projectId,
   firestore: { host: "127.0.0.1", port: 8080, rules: firestoreRules },
-  storage: { host: "127.0.0.1", port: 9199, rules: storageRules },
 });
 
 const translations = Object.fromEntries(["pt", "en", "es", "fr", "de", "zh"].map((locale) => [locale, {
@@ -111,17 +105,6 @@ test("active admin can write valid data but cannot smuggle fields", async () => 
     updatedAt: serverTimestamp(),
     injectedRole: "admin",
   }));
-});
-
-test("storage accepts admin images and rejects unauthorized or invalid uploads", async () => {
-  const adminStorage = environment.authenticatedContext("admin-1").storage();
-  const userStorage = environment.authenticatedContext("user-1").storage();
-  const publicStorage = environment.unauthenticatedContext().storage();
-  const imagePath = "projects/city__published/images/test.png";
-  await assertSucceeds(uploadBytes(ref(adminStorage, imagePath), new Uint8Array([1, 2, 3]), { contentType: "image/png" }));
-  await assertFails(uploadBytes(ref(userStorage, "projects/city__published/images/attack.png"), new Uint8Array([1]), { contentType: "image/png" }));
-  await assertFails(uploadBytes(ref(adminStorage, "projects/city__published/images/attack.html"), new Uint8Array([1]), { contentType: "text/html" }));
-  await assertSucceeds(getBytes(ref(publicStorage, imagePath)));
 });
 
 test.after(async () => {

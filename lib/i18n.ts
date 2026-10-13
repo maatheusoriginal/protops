@@ -334,22 +334,30 @@ export function getLocalizedProject(project: Project, cityName: string, locale: 
 
 export function getWhatsAppUrl(locale: Locale, projectName?: string, cityName?: string) {
   const general: Record<Locale, string> = {
-    pt: "Olá, vim pelo site da Pro-Tops e quero conhecer os empreendimentos.",
-    en: "Hello, I visited the Pro-Tops website and would like to learn more about the developments.",
-    es: "Hola, visité el sitio web de Pro-Tops y me gustaría conocer los proyectos.",
-    fr: "Bonjour, j’ai consulté le site de Pro-Tops et je souhaite en savoir plus sur les projets.",
-    de: "Guten Tag, ich habe die Pro-Tops-Website besucht und möchte mehr über die Projekte erfahren.",
-    zh: "您好，我浏览了 Pro-Tops 网站，希望进一步了解开发项目。",
+    pt: "Olá! Vim pelo site da Pro-Tops e gostaria de conhecer os empreendimentos disponíveis.",
+    en: "Hello! I visited the Pro-Tops website and would like to learn more about the available developments.",
+    es: "¡Hola! Visité el sitio web de Pro-Tops y me gustaría conocer los proyectos disponibles.",
+    fr: "Bonjour ! J’ai consulté le site de Pro-Tops et je souhaite découvrir les projets disponibles.",
+    de: "Guten Tag! Ich habe die Pro-Tops-Website besucht und möchte mehr über die verfügbaren Projekte erfahren.",
+    zh: "您好！我浏览了 Pro-Tops 网站，希望进一步了解目前可选的开发项目。",
+  };
+  const cityMessage: Record<Locale, string> = {
+    pt: `Olá! Vim pelo site da Pro-Tops e gostaria de conhecer os empreendimentos disponíveis em *${cityName}*.`,
+    en: `Hello! I visited the Pro-Tops website and would like to learn more about the developments available in *${cityName}*.`,
+    es: `¡Hola! Visité el sitio web de Pro-Tops y me gustaría conocer los proyectos disponibles en *${cityName}*.`,
+    fr: `Bonjour ! J’ai consulté le site de Pro-Tops et je souhaite découvrir les projets disponibles à *${cityName}*.`,
+    de: `Guten Tag! Ich habe die Pro-Tops-Website besucht und möchte mehr über die verfügbaren Projekte in *${cityName}* erfahren.`,
+    zh: `您好！我浏览了 Pro-Tops 网站，希望进一步了解 *${cityName}* 的开发项目。`,
   };
   const projectMessage: Record<Locale, string> = {
-    pt: `Olá, tenho interesse no ${projectName}, em ${cityName}.`,
-    en: `Hello, I am interested in ${projectName}, in ${cityName}.`,
-    es: `Hola, estoy interesado en ${projectName}, en ${cityName}.`,
-    fr: `Bonjour, je suis intéressé par ${projectName}, à ${cityName}.`,
-    de: `Guten Tag, ich interessiere mich für ${projectName} in ${cityName}.`,
-    zh: `您好，我对位于 ${cityName} 的 ${projectName} 项目感兴趣。`,
+    pt: `Olá! Vim pelo site da Pro-Tops e tenho interesse no empreendimento *${projectName}*, em *${cityName}*. Gostaria de receber informações sobre disponibilidade, valores e condições.`,
+    en: `Hello! I visited the Pro-Tops website and I am interested in *${projectName}* in *${cityName}*. I would like information about availability, pricing and terms.`,
+    es: `¡Hola! Visité el sitio web de Pro-Tops y estoy interesado en *${projectName}*, en *${cityName}*. Me gustaría recibir información sobre disponibilidad, precios y condiciones.`,
+    fr: `Bonjour ! J’ai consulté le site de Pro-Tops et je suis intéressé par *${projectName}* à *${cityName}*. Je souhaite recevoir des informations sur les disponibilités, les prix et les conditions.`,
+    de: `Guten Tag! Ich habe die Pro-Tops-Website besucht und interessiere mich für *${projectName}* in *${cityName}*. Ich hätte gerne Informationen zu Verfügbarkeit, Preisen und Konditionen.`,
+    zh: `您好！我浏览了 Pro-Tops 网站，对位于 *${cityName}* 的 *${projectName}* 项目感兴趣。希望了解供应情况、价格和条件。`,
   };
-  const message = projectName && cityName ? projectMessage[locale] : general[locale];
+  const message = projectName && cityName ? projectMessage[locale] : cityName ? cityMessage[locale] : general[locale];
   return `https://wa.me/553432310800?text=${encodeURIComponent(message)}`;
 }
 

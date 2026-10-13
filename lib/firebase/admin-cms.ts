@@ -17,16 +17,19 @@ import {
   type QueryDocumentSnapshot,
   type Unsubscribe,
 } from "firebase/firestore";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import {
   seedCmsCities,
   seedCmsProjects,
   type CmsCity,
+  type CmsCityTranslation,
   type CmsProject,
+  type CmsProjectTranslation,
 } from "@/lib/cms-model";
-import { firebaseAuth, firebaseDb, firebaseStorage } from "@/lib/firebase/client";
+import { firebaseAuth, firebaseDb } from "@/lib/firebase/client";
+import type { Locale } from "@/lib/i18n";
 
 const MAX_IMAGE_SIZE = 15 * 1024 * 1024;
+const translatedLocales: Exclude<Locale, "pt">[] = ["en", "es", "fr", "de", "zh"];
 
 function requireUserId() {
   const uid = firebaseAuth.currentUser?.uid;
@@ -177,14 +180,89 @@ export async function saveCmsCity(city: CmsCity) {
 export async function uploadProjectImages(project: Pick<CmsProject, "id" | "citySlug" | "slug">, files: File[]) {
   requireUserId();
   const projectId = project.id || `${project.citySlug}__${project.slug || "novo"}`;
+  const token = await firebaseAuth.currentUser!.getIdToken();
+  const signatureResponse = await fetch("/api/admin/cloudinary-signature", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ projectId }),
+  });
+  const signatureData = await signatureResponse.json() as {
+    error?: string;
+    cloudName?: string;
+    apiKey?: string;
+    folder?: string;
+    timestamp?: number;
+    signature?: string;
+  };
+  if (!signatureResponse.ok || !signatureData.cloudName || !signatureData.apiKey || !signatureData.folder || !signatureData.timestamp || !signatureData.signature) {
+    throw new Error(signatureData.error || "Não foi possível iniciar o envio para a Cloudinary.");
+  }
+
   return Promise.all(files.map(async (file) => {
     if (!file.type.startsWith("image/")) throw new Error(`${file.name} não é uma imagem válida.`);
     if (file.size > MAX_IMAGE_SIZE) throw new Error(`${file.name} ultrapassa o limite de 15 MB.`);
-    const safeName = file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
-    const storageRef = ref(firebaseStorage, `projects/${projectId}/images/${crypto.randomUUID()}-${safeName}`);
-    const result = await uploadBytes(storageRef, file, { contentType: file.type });
-    return getDownloadURL(result.ref);
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("api_key", signatureData.apiKey!);
+    formData.append("timestamp", String(signatureData.timestamp));
+    formData.append("signature", signatureData.signature!);
+    formData.append("folder", signatureData.folder!);
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${encodeURIComponent(signatureData.cloudName!)}/image/upload`,
+      { method: "POST", body: formData },
+    );
+    const result = await response.json() as { secure_url?: string; error?: { message?: string } };
+    if (!response.ok || !result.secure_url) {
+      throw new Error(result.error?.message || `Não foi possível enviar ${file.name}.`);
+    }
+    return result.secure_url.replace(
+      "/image/upload/",
+      "/image/upload/f_auto,q_auto:good,c_limit,w_2400/",
+    );
   }));
+}
+
+async function requestAutomaticTranslations<T extends CmsProjectTranslation | CmsCityTranslation>(
+  kind: "project" | "city",
+  source: T,
+) {
+  requireUserId();
+  const token = await firebaseAuth.currentUser!.getIdToken();
+  const response = await fetch("/api/admin/translate", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ kind, source }),
+  });
+  const result = await response.json() as {
+    error?: string;
+    translations?: Partial<Record<Exclude<Locale, "pt">, T>>;
+  };
+  if (!response.ok || !result.translations) {
+    throw new Error(result.error || "Não foi possível gerar as traduções.");
+  }
+
+  for (const locale of translatedLocales) {
+    if (!result.translations[locale]) {
+      throw new Error(`A tradução para ${locale.toUpperCase()} não foi concluída.`);
+    }
+  }
+  return result.translations;
+}
+
+export function translateProjectContent(source: CmsProjectTranslation) {
+  return requestAutomaticTranslations<CmsProjectTranslation>("project", source);
+}
+
+export function translateCityContent(source: CmsCityTranslation) {
+  return requestAutomaticTranslations<CmsCityTranslation>("city", source);
 }
 
 export async function ensureSeedCmsData() {

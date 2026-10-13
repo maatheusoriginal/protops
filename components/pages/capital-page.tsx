@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Building2, Globe2, House, MessageCircle, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FloatingWhatsApp } from "@/components/floating-whatsapp";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { getCopy, getWhatsAppUrl, localePath, type Locale } from "@/lib/i18n";
@@ -17,6 +18,7 @@ export function CapitalPage({ locale }: { locale: Locale }) {
       <section className="section capital-intro"><div className="site-shell capital-intro-grid"><div><p className="eyebrow">{copy.capital.eyebrow}</p><h2>{copy.capital.introTitle}</h2></div><p>{copy.capital.intro}</p></div></section>
       <section className="capital-pillars"><div className="site-shell capital-pillars-grid">{copy.capital.pillars.map(([title, description], index) => { const Icon = pillarIcons[index]; return <article key={title}><Icon aria-hidden="true" /><span>0{index + 1}</span><h3>{title}</h3><p>{description}</p></article>; })}</div></section>
       <section className="capital-disclaimer"><div className="site-shell"><h2>{copy.capital.disclaimerTitle}</h2><p>{copy.capital.disclaimer}</p></div></section>
+      <FloatingWhatsApp locale={locale} href={whatsappUrl} />
       <SiteFooter locale={locale} />
     </main>
   );

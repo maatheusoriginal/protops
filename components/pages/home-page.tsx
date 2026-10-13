@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowDown, ArrowUpRight, Building2, Globe2, MapPin, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FloatingWhatsApp } from "@/components/floating-whatsapp";
 import { ProjectCard } from "@/components/project-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
@@ -102,6 +103,7 @@ export async function HomePage({ locale }: { locale: Locale }) {
       <section className="contact-band">
         <div className="site-shell contact-band-inner"><div><p className="eyebrow eyebrow-light">{copy.home.nextEyebrow}</p><h2>{copy.home.nextTitle}</h2></div><Button asChild size="lg" className="button-light"><a href={whatsappUrl} target="_blank" rel="noreferrer"><MessageCircle aria-hidden="true" /> {copy.home.nextCta}</a></Button></div>
       </section>
+      <FloatingWhatsApp locale={locale} href={whatsappUrl} />
       <SiteFooter locale={locale} />
     </main>
   );
