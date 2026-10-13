@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { CmsCity, CmsProject } from "@/lib/cms-model";
 import { firebaseConfig } from "@/lib/firebase/config";
 
@@ -63,29 +64,31 @@ async function runQuery(collectionId: string, filters: Array<[string, "EQUAL", F
 
 const stringValue = (value: string): FirestoreValue => ({ stringValue: value });
 const booleanValue = (value: boolean): FirestoreValue => ({ booleanValue: value });
+const getActiveCities = cache(() => runQuery("cities", [["active", "EQUAL", booleanValue(true)]]));
+const getPublishedProjects = cache(() => runQuery("projects", [["status", "EQUAL", stringValue("published")]]));
 
 export async function getPublicCmsCities(): Promise<CmsCity[] | undefined> {
-  return await runQuery("cities", [["active", "EQUAL", booleanValue(true)]]) as unknown as CmsCity[] | undefined;
+  return await getActiveCities() as unknown as CmsCity[] | undefined;
 }
 
 export async function getPublicCmsCity(slug: string): Promise<CmsCity | null | undefined> {
-  const cities = await runQuery("cities", [["active", "EQUAL", booleanValue(true)]]);
+  const cities = await getActiveCities();
   if (cities === undefined) return undefined;
   return (cities.find((city) => city.slug === slug) as unknown as CmsCity | undefined) ?? null;
 }
 
 export async function getPublicCmsProjectsByCity(citySlug: string): Promise<CmsProject[] | undefined> {
-  const projects = await runQuery("projects", [["status", "EQUAL", stringValue("published")]]);
+  const projects = await getPublishedProjects();
   return projects?.filter((project) => project.citySlug === citySlug) as unknown as CmsProject[] | undefined;
 }
 
 export async function getPublicCmsFeaturedProjects(): Promise<CmsProject[] | undefined> {
-  const projects = await runQuery("projects", [["status", "EQUAL", stringValue("published")]]);
+  const projects = await getPublishedProjects();
   return projects?.filter((project) => project.featured).slice(0, 8) as unknown as CmsProject[] | undefined;
 }
 
 export async function getPublicCmsProject(citySlug: string, slug: string): Promise<CmsProject | null | undefined> {
-  const projects = await runQuery("projects", [["status", "EQUAL", stringValue("published")]]);
+  const projects = await getPublishedProjects();
   if (projects === undefined) return undefined;
   return (projects.find((project) => project.citySlug === citySlug && project.slug === slug) as unknown as CmsProject | undefined) ?? null;
 }
