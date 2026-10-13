@@ -1,0 +1,177 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function adminPath() {
+      return /databases/$(database)/documents/admins/$(request.auth.uid);
+    }
+
+    function isAdmin() {
+      return signedIn()
+        && exists(adminPath())
+        && get(adminPath()).data.active == true
+        && get(adminPath()).data.role == 'admin';
+    }
+
+    function shortText(value, maximum) {
+      return value is string && value.size() <= maximum;
+    }
+
+    function validStringList(values, maximumItems, maximumCharacters) {
+      return values is list
+        && values.size() <= maximumItems
+        && (values.size() == 0 || (
+          values[0] is string
+          && values[0].size() <= maximumCharacters
+          && values[values.size() - 1] is string
+          && values[values.size() - 1].size() <= maximumCharacters
+        ));
+    }
+
+    function validProjectTranslation(value) {
+      return value is map
+        && value.keys().hasOnly(['name', 'summary', 'description'])
+        && value.keys().hasAll(['name', 'summary', 'description'])
+        && shortText(value.name, 160)
+        && shortText(value.summary, 500)
+        && shortText(value.description, 6000);
+    }
+
+    function validProjectTranslations(value) {
+      return value is map
+        && value.keys().hasOnly(['pt', 'en', 'es', 'fr', 'de', 'zh'])
+        && value.keys().hasAll(['pt'])
+        && validProjectTranslation(value.pt)
+        && (!('en' in value) || validProjectTranslation(value.en))
+        && (!('es' in value) || validProjectTranslation(value.es))
+        && (!('fr' in value) || validProjectTranslation(value.fr))
+        && (!('de' in value) || validProjectTranslation(value.de))
+        && (!('zh' in value) || validProjectTranslation(value.zh));
+    }
+
+    function validCityTranslation(value) {
+      return value is map
+        && value.keys().hasOnly(['name', 'intro', 'statement'])
+        && value.keys().hasAll(['name', 'intro', 'statement'])
+        && shortText(value.name, 120)
+        && shortText(value.intro, 1200)
+        && shortText(value.statement, 300);
+    }
+
+    function validCityTranslations(value) {
+      return value is map
+        && value.keys().hasOnly(['pt', 'en', 'es', 'fr', 'de', 'zh'])
+        && value.keys().hasAll(['pt'])
+        && validCityTranslation(value.pt)
+        && (!('en' in value) || validCityTranslation(value.en))
+        && (!('es' in value) || validCityTranslation(value.es))
+        && (!('fr' in value) || validCityTranslation(value.fr))
+        && (!('de' in value) || validCityTranslation(value.de))
+        && (!('zh' in value) || validCityTranslation(value.zh));
+    }
+
+    function validProject(data, projectId) {
+      return data.keys().hasOnly([
+          'id', 'slug', 'citySlug', 'category', 'status', 'featured',
+          'heroImage', 'gallery', 'videoUrl', 'address', 'mapUrl',
+          'priceLabel', 'lotSize', 'features', 'translations',
+          'createdAt', 'updatedAt', 'updatedBy'
+        ])
+        && data.keys().hasAll([
+          'id', 'slug', 'citySlug', 'category', 'status', 'featured',
+          'heroImage', 'gallery', 'videoUrl', 'address', 'mapUrl',
+          'priceLabel', 'lotSize', 'features', 'translations',
+          'createdAt', 'updatedAt', 'updatedBy'
+        ])
+        && data.id == projectId
+        && shortText(data.slug, 100)
+        && data.slug.matches('^[a-z0-9]+(?:-[a-z0-9]+)*$')
+        && shortText(data.citySlug, 100)
+        && data.citySlug.matches('^[a-z0-9]+(?:-[a-z0-9]+)*$')
+        && shortText(data.category, 120)
+        && data.status in ['published', 'draft', 'archived']
+        && data.featured is bool
+        && shortText(data.heroImage, 2048)
+        && validStringList(data.gallery, 25, 2048)
+        && shortText(data.videoUrl, 2048)
+        && shortText(data.address, 500)
+        && shortText(data.mapUrl, 2048)
+        && shortText(data.priceLabel, 160)
+        && shortText(data.lotSize, 160)
+        && validStringList(data.features, 20, 240)
+        && validProjectTranslations(data.translations)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedBy == request.auth.uid;
+    }
+
+    function validCity(data, cityId) {
+      return data.keys().hasOnly([
+          'id', 'slug', 'name', 'state', 'heroImage', 'intro', 'statement',
+          'translations', 'active', 'createdAt', 'updatedAt', 'updatedBy'
+        ])
+        && data.keys().hasAll([
+          'id', 'slug', 'name', 'state', 'heroImage', 'intro', 'statement',
+          'translations', 'active', 'createdAt', 'updatedAt', 'updatedBy'
+        ])
+        && data.id == cityId
+        && shortText(data.slug, 100)
+        && data.slug.matches('^[a-z0-9]+(?:-[a-z0-9]+)*$')
+        && shortText(data.name, 120)
+        && shortText(data.state, 120)
+        && shortText(data.heroImage, 2048)
+        && shortText(data.intro, 1200)
+        && shortText(data.statement, 300)
+        && validCityTranslations(data.translations)
+        && data.active is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp
+        && data.updatedBy == request.auth.uid;
+    }
+
+    match /admins/{userId} {
+      allow get: if signedIn() && request.auth.uid == userId;
+      allow list, create, update, delete: if false;
+    }
+
+    match /projects/{projectId} {
+      allow get, list: if resource.data.status == 'published' || isAdmin();
+      allow create: if isAdmin()
+        && validProject(request.resource.data, projectId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin()
+        && validProject(request.resource.data, projectId)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /cities/{cityId} {
+      allow get, list: if resource.data.active == true || isAdmin();
+      allow create: if isAdmin()
+        && validCity(request.resource.data, cityId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+      allow update: if isAdmin()
+        && validCity(request.resource.data, cityId)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

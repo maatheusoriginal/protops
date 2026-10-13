@@ -4,19 +4,26 @@ import { Button } from "@/components/ui/button";
 import { ProjectCard } from "@/components/project-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { cmsCityToSiteCity, cmsProjectToSiteProject } from "@/lib/cms-model";
+import { getPublicCmsCities, getPublicCmsFeaturedProjects } from "@/lib/firebase/public-data";
 import { cities, getCity, projects } from "@/lib/site-data";
 import { getCopy, getLocalizedCity, getLocalizedProject, getWhatsAppUrl, localePath, type Locale } from "@/lib/i18n";
 
 const featuredSlugs = ["golden-village", "bonanza", "park-sul", "vila-bela"];
 
-export function HomePage({ locale }: { locale: Locale }) {
+export async function HomePage({ locale }: { locale: Locale }) {
   const copy = getCopy(locale);
   const whatsappUrl = getWhatsAppUrl(locale);
-  const localizedCities = cities.map((city) => getLocalizedCity(city, locale));
-  const featured = featuredSlugs
-    .map((slug) => projects.find((project) => project.slug === slug))
-    .filter((project): project is NonNullable<typeof project> => Boolean(project))
-    .map((project) => getLocalizedProject(project, getCity(project.city)?.name ?? "", locale));
+  const [remoteCities, remoteFeatured] = await Promise.all([getPublicCmsCities(), getPublicCmsFeaturedProjects()]);
+  const localizedCities = remoteCities === undefined
+    ? cities.map((city) => getLocalizedCity(city, locale))
+    : remoteCities.map((city) => cmsCityToSiteCity(city, locale));
+  const featured = remoteFeatured === undefined
+    ? featuredSlugs
+      .map((slug) => projects.find((project) => project.slug === slug))
+      .filter((project): project is NonNullable<typeof project> => Boolean(project))
+      .map((project) => getLocalizedProject(project, getCity(project.city)?.name ?? "", locale))
+    : remoteFeatured.map((project) => cmsProjectToSiteProject(project, localizedCities.find((city) => city.slug === project.citySlug)?.name ?? project.citySlug, locale));
 
   return (
     <main>

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { cmsCityToSiteCity, cmsProjectToSiteProject } from "@/lib/cms-model";
+import { getPublicCmsCity, getPublicCmsProject } from "@/lib/firebase/public-data";
 import { getCity, getProject } from "@/lib/site-data";
 import { getCopy, getHtmlLang, getLocalizedCity, getLocalizedProject, languageOptions, localePath, type Locale } from "@/lib/i18n";
 
@@ -20,27 +22,30 @@ export function homeMetadata(locale: Locale): Metadata {
   };
 }
 
-export function cityMetadata(locale: Locale, citySlug: string): Metadata {
+export async function cityMetadata(locale: Locale, citySlug: string): Promise<Metadata> {
+  const remoteCity = await getPublicCmsCity(citySlug);
   const city = getCity(citySlug);
-  if (!city) return {};
-  const localizedCity = getLocalizedCity(city, locale);
+  if (remoteCity === null || (remoteCity === undefined && !city)) return {};
+  const localizedCity = remoteCity ? cmsCityToSiteCity(remoteCity, locale) : getLocalizedCity(city!, locale);
   const labels: Record<Locale, string> = { pt: "Empreendimentos em", en: "Developments in", es: "Proyectos en", fr: "Projets à", de: "Projekte in", zh: "开发项目" };
   return {
-    title: `${labels[locale]} ${city.name}`,
+    title: `${labels[locale]} ${localizedCity.name}`,
     description: localizedCity.intro,
-    alternates: alternates(locale, `/${city.slug}`),
+    alternates: alternates(locale, `/${localizedCity.slug}`),
   };
 }
 
-export function projectMetadata(locale: Locale, citySlug: string, projectSlug: string): Metadata {
+export async function projectMetadata(locale: Locale, citySlug: string, projectSlug: string): Promise<Metadata> {
+  const [remoteProject, remoteCity] = await Promise.all([getPublicCmsProject(citySlug, projectSlug), getPublicCmsCity(citySlug)]);
   const project = getProject(citySlug, projectSlug);
   const city = getCity(citySlug);
-  if (!project || !city) return {};
-  const localizedProject = getLocalizedProject(project, city.name, locale);
+  if (remoteProject === null || remoteCity === null || (remoteProject === undefined && !project) || (remoteCity === undefined && !city)) return {};
+  const localizedCity = remoteCity ? cmsCityToSiteCity(remoteCity, locale) : getLocalizedCity(city!, locale);
+  const localizedProject = remoteProject ? cmsProjectToSiteProject(remoteProject, localizedCity.name, locale) : getLocalizedProject(project!, localizedCity.name, locale);
   return {
     title: localizedProject.name,
     description: localizedProject.summary,
-    alternates: alternates(locale, `/${city.slug}/${project.slug}`),
+    alternates: alternates(locale, `/${localizedCity.slug}/${localizedProject.slug}`),
   };
 }
 

@@ -17,6 +17,10 @@ Site institucional e comercial multilíngue da Pro-Tops, com páginas específic
 - Links de WhatsApp contextualizados por idioma e empreendimento
 - Layout responsivo para computador, tablet e celular
 - Imagens em WebP e vídeo preparado para carregamento na web
+- Painel administrativo protegido em `/admin`
+- Cadastro de cidades e empreendimentos com 6 idiomas
+- Upload de imagens para Firebase Storage
+- Publicação em tempo real por meio do Cloud Firestore
 
 ## Rotas e idiomas
 
@@ -46,8 +50,25 @@ Os demais idiomas recebem um prefixo:
 - TypeScript
 - Tailwind CSS 4
 - Vinext e Cloudflare Workers
+- Firebase Authentication, Cloud Firestore e Storage
 - Radix UI / shadcn
 - pnpm
+
+## Ativação do Firebase sem terminal
+
+O Web SDK já está configurado para o projeto `protops-uberlandia`. A ativação inicial é feita somente pelo [Console do Firebase](https://console.firebase.google.com/), sem Firebase CLI:
+
+1. Em **Authentication → Sign-in method**, ative **E-mail/senha**.
+2. Em **Authentication → Users**, crie o primeiro usuário administrador e copie o UID dele.
+3. Crie o banco **Cloud Firestore** no modo de produção e ative o **Storage**.
+4. Em **Firestore Database → Rules**, publique o conteúdo de `firestore.rules`.
+5. Em **Storage → Rules**, publique o conteúdo de `storage.rules`.
+6. No Firestore, crie a coleção `admins`; use o UID copiado como ID do documento e adicione os campos `active` (booleano `true`) e `role` (texto `admin`).
+7. Acesse `/admin/login`. No primeiro acesso autorizado, o painel cria automaticamente as cidades e os empreendimentos iniciais no banco.
+
+As configurações públicas do Web SDK não concedem acesso administrativo. Login, permissões e tipos de arquivo são validados pelas regras incluídas no projeto.
+
+Os arquivos `firebase.json`, `firestore.indexes.json`, `firestore.rules` e `storage.rules` também ficam prontos para um deploy futuro por CI/CD, caso a equipe adote esse fluxo.
 
 ## Executar localmente
 
@@ -79,9 +100,11 @@ pnpm build
 ```text
 app/                         Páginas e rotas por idioma
 components/pages/            Estruturas compartilhadas das páginas
+components/admin/            Login e painel administrativo
 components/language-switcher.tsx
 lib/i18n.ts                  Traduções e configuração de idiomas
 lib/site-data.ts             Cidades e empreendimentos
+lib/firebase/                SDK, sincronização e leitura pública
 public/media/                Logos, imagens WebP e vídeo otimizado
 ```
 

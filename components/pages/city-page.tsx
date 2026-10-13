@@ -4,16 +4,24 @@ import { Button } from "@/components/ui/button";
 import { ProjectCard } from "@/components/project-card";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
+import { cmsCityToSiteCity, cmsProjectToSiteProject } from "@/lib/cms-model";
+import { getPublicCmsCity, getPublicCmsProjectsByCity } from "@/lib/firebase/public-data";
 import { getCity, getCityProjects } from "@/lib/site-data";
 import { formatCount, getCopy, getLocalizedCity, getLocalizedProject, getWhatsAppUrl, type Locale } from "@/lib/i18n";
 
-export function CityPage({ locale, citySlug }: { locale: Locale; citySlug: string }) {
+export async function CityPage({ locale, citySlug }: { locale: Locale; citySlug: string }) {
+  const [remoteCity, remoteProjects] = await Promise.all([
+    getPublicCmsCity(citySlug),
+    getPublicCmsProjectsByCity(citySlug),
+  ]);
   const baseCity = getCity(citySlug);
-  if (!baseCity) notFound();
+  if (remoteCity === null || (remoteCity === undefined && !baseCity)) notFound();
 
   const copy = getCopy(locale);
-  const city = getLocalizedCity(baseCity, locale);
-  const cityProjects = getCityProjects(city.slug).map((project) => getLocalizedProject(project, city.name, locale));
+  const city = remoteCity ? cmsCityToSiteCity(remoteCity, locale) : getLocalizedCity(baseCity!, locale);
+  const cityProjects = remoteProjects === undefined
+    ? getCityProjects(city.slug).map((project) => getLocalizedProject(project, city.name, locale))
+    : remoteProjects.map((project) => cmsProjectToSiteProject(project, city.name, locale));
   const whatsappUrl = getWhatsAppUrl(locale);
   const currentPath = `/${city.slug}`;
 

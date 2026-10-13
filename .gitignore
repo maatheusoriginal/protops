@@ -36,6 +36,9 @@ yarn-error.log*
 
 # typescript
 next-env.d.ts
+*.tsbuildinfo
+*-debug.log
+firebase-export/
 /dist/
 /.wrangler/
 # Checkout-local execution profile and tool state; never publish them.
