@@ -11,6 +11,8 @@ import { cmsCityToSiteCity, cmsProjectToSiteProject } from "@/lib/cms-model";
 import { getPublicCmsCity, getPublicCmsProject, getPublicCmsProjectsByCity } from "@/lib/firebase/public-data";
 import { getCity, getCityProjects, getProject } from "@/lib/site-data";
 import { getCopy, getLocalizedCity, getLocalizedProject, getWhatsAppUrl, localePath, type Locale } from "@/lib/i18n";
+import { formatLotSize, formatProjectPrice, parseProjectPrice } from "@/lib/project-commercial";
+import { getExchangeRates } from "@/lib/server/exchange-rates";
 
 const detailCopy: Record<Locale, {
   details: string;
@@ -22,6 +24,7 @@ const detailCopy: Record<Locale, {
   videoEyebrow: string;
   videoTitle: string;
   watchVideo: string;
+  openMap: string;
   images: (count: number) => string;
   onRequest: string;
   galleryEyebrow: string;
@@ -33,7 +36,7 @@ const detailCopy: Record<Locale, {
   steps: Array<[string, string]>;
 }> = {
   pt: {
-    details: "Informações do empreendimento", profile: "Perfil", location: "Localização", archive: "Acervo visual", availability: "Disponibilidade", lotSize: "Área dos lotes", videoEyebrow: "Sobrevoo do empreendimento", videoTitle: "Veja o projeto em movimento.", watchVideo: "Assistir ao vídeo",
+    details: "Informações do empreendimento", profile: "Perfil", location: "Localização", archive: "Acervo visual", availability: "Disponibilidade", lotSize: "Área dos lotes", videoEyebrow: "Sobrevoo do empreendimento", videoTitle: "Veja o projeto em movimento.", watchVideo: "Assistir ao vídeo", openMap: "Abrir localização no mapa",
     images: (count) => `${count} imagens`, onRequest: "Sob consulta",
     galleryEyebrow: "Explore cada ângulo", galleryTitle: "Uma visão mais completa antes da sua visita.", galleryText: "Imagens reais de drone mostram a implantação, os acessos e a relação do empreendimento com o entorno.",
     galleryLabels: { open: "Abrir galeria", close: "Fechar galeria", previous: "Imagem anterior", next: "Próxima imagem", image: "imagem" },
@@ -41,7 +44,7 @@ const detailCopy: Record<Locale, {
     steps: [["Explore o acervo", "Veja imagens reais e entenda melhor a escala e o entorno."], ["Converse com a equipe", "Receba informações atualizadas sobre disponibilidade e condições."], ["Agende uma visita", "Conheça o empreendimento de perto com atendimento orientado."]],
   },
   en: {
-    details: "Development information", profile: "Profile", location: "Location", archive: "Visual archive", availability: "Availability", lotSize: "Lot size", videoEyebrow: "Aerial tour", videoTitle: "See the development in motion.", watchVideo: "Watch the video",
+    details: "Development information", profile: "Profile", location: "Location", archive: "Visual archive", availability: "Availability", lotSize: "Lot size", videoEyebrow: "Aerial tour", videoTitle: "See the development in motion.", watchVideo: "Watch the video", openMap: "Open location on map",
     images: (count) => `${count} images`, onRequest: "On request",
     galleryEyebrow: "Explore every angle", galleryTitle: "A clearer view before your visit.", galleryText: "Real drone imagery shows the site, access routes and how the development connects with its surroundings.",
     galleryLabels: { open: "Open gallery", close: "Close gallery", previous: "Previous image", next: "Next image", image: "image" },
@@ -49,7 +52,7 @@ const detailCopy: Record<Locale, {
     steps: [["Explore the archive", "Review real imagery and understand the scale and surroundings."], ["Talk to our team", "Receive current availability and commercial information."], ["Schedule a visit", "Experience the development with guided assistance."]],
   },
   es: {
-    details: "Información del proyecto", profile: "Perfil", location: "Ubicación", archive: "Archivo visual", availability: "Disponibilidad", lotSize: "Área de los lotes", videoEyebrow: "Recorrido aéreo", videoTitle: "Vea el proyecto en movimiento.", watchVideo: "Ver el video",
+    details: "Información del proyecto", profile: "Perfil", location: "Ubicación", archive: "Archivo visual", availability: "Disponibilidad", lotSize: "Área de los lotes", videoEyebrow: "Recorrido aéreo", videoTitle: "Vea el proyecto en movimiento.", watchVideo: "Ver el video", openMap: "Abrir ubicación en el mapa",
     images: (count) => `${count} imágenes`, onRequest: "A consultar",
     galleryEyebrow: "Explore cada ángulo", galleryTitle: "Una visión más completa antes de su visita.", galleryText: "Imágenes reales de dron muestran el área, los accesos y la relación del proyecto con su entorno.",
     galleryLabels: { open: "Abrir galería", close: "Cerrar galería", previous: "Imagen anterior", next: "Siguiente imagen", image: "imagen" },
@@ -57,7 +60,7 @@ const detailCopy: Record<Locale, {
     steps: [["Explore el archivo", "Vea imágenes reales y comprenda la escala y el entorno."], ["Hable con el equipo", "Reciba información actualizada sobre disponibilidad y condiciones."], ["Programe una visita", "Conozca el proyecto de cerca con atención personalizada."]],
   },
   fr: {
-    details: "Informations sur le projet", profile: "Profil", location: "Localisation", archive: "Archives visuelles", availability: "Disponibilité", lotSize: "Surface des lots", videoEyebrow: "Vue aérienne", videoTitle: "Découvrez le projet en mouvement.", watchVideo: "Voir la vidéo",
+    details: "Informations sur le projet", profile: "Profil", location: "Localisation", archive: "Archives visuelles", availability: "Disponibilité", lotSize: "Surface des lots", videoEyebrow: "Vue aérienne", videoTitle: "Découvrez le projet en mouvement.", watchVideo: "Voir la vidéo", openMap: "Ouvrir l’emplacement sur la carte",
     images: (count) => `${count} images`, onRequest: "Sur demande",
     galleryEyebrow: "Explorez chaque angle", galleryTitle: "Une vision plus complète avant votre visite.", galleryText: "Des images réelles par drone présentent le site, les accès et son intégration dans l’environnement.",
     galleryLabels: { open: "Ouvrir la galerie", close: "Fermer la galerie", previous: "Image précédente", next: "Image suivante", image: "image" },
@@ -65,7 +68,7 @@ const detailCopy: Record<Locale, {
     steps: [["Explorez les images", "Découvrez le projet, son échelle et son environnement."], ["Échangez avec l’équipe", "Recevez les disponibilités et conditions actualisées."], ["Planifiez une visite", "Découvrez le projet sur place avec un accompagnement dédié."]],
   },
   de: {
-    details: "Projektinformationen", profile: "Profil", location: "Standort", archive: "Bildarchiv", availability: "Verfügbarkeit", lotSize: "Grundstücksgröße", videoEyebrow: "Luftaufnahme", videoTitle: "Erleben Sie das Projekt in Bewegung.", watchVideo: "Video ansehen",
+    details: "Projektinformationen", profile: "Profil", location: "Standort", archive: "Bildarchiv", availability: "Verfügbarkeit", lotSize: "Grundstücksgröße", videoEyebrow: "Luftaufnahme", videoTitle: "Erleben Sie das Projekt in Bewegung.", watchVideo: "Video ansehen", openMap: "Standort auf der Karte öffnen",
     images: (count) => `${count} Bilder`, onRequest: "Auf Anfrage",
     galleryEyebrow: "Jede Perspektive entdecken", galleryTitle: "Ein umfassender Eindruck vor Ihrem Besuch.", galleryText: "Aktuelle Drohnenbilder zeigen das Areal, die Zufahrten und die Einbindung in die Umgebung.",
     galleryLabels: { open: "Galerie öffnen", close: "Galerie schließen", previous: "Vorheriges Bild", next: "Nächstes Bild", image: "Bild" },
@@ -73,7 +76,7 @@ const detailCopy: Record<Locale, {
     steps: [["Bilder entdecken", "Erhalten Sie einen realen Eindruck von Größe und Umgebung."], ["Team kontaktieren", "Erhalten Sie aktuelle Angaben zu Verfügbarkeit und Konditionen."], ["Besuch vereinbaren", "Lernen Sie das Projekt mit persönlicher Begleitung kennen."]],
   },
   zh: {
-    details: "项目资料", profile: "项目类型", location: "位置", archive: "影像资料", availability: "供应情况", lotSize: "地块面积", videoEyebrow: "航拍视频", videoTitle: "通过动态影像了解项目。", watchVideo: "观看视频",
+    details: "项目资料", profile: "项目类型", location: "位置", archive: "影像资料", availability: "供应情况", lotSize: "地块面积", videoEyebrow: "航拍视频", videoTitle: "通过动态影像了解项目。", watchVideo: "观看视频", openMap: "在地图中查看位置",
     images: (count) => `${count} 张图片`, onRequest: "欢迎咨询",
     galleryEyebrow: "多角度探索", galleryTitle: "实地考察前，更全面地了解项目。", galleryText: "真实无人机影像展示项目区域、交通条件及其与周边环境的联系。",
     galleryLabels: { open: "打开图库", close: "关闭图库", previous: "上一张", next: "下一张", image: "图片" },
@@ -120,8 +123,20 @@ export async function ProjectPage({ locale, citySlug, projectSlug }: { locale: L
   const projectWhatsapp = getWhatsAppUrl(locale, project.name, city.name);
   const currentPath = `/${city.slug}/${project.slug}`;
   const embedUrl = remoteProject?.videoUrl ? videoEmbedUrl(remoteProject.videoUrl) : null;
+  const parsedPrice = parseProjectPrice(remoteProject?.priceLabel ?? "");
+  let exchangeRates = null;
+  if (remoteProject?.priceLabel.startsWith("@price:") && locale !== "pt" && parsedPrice.mode !== "consultation") {
+    try {
+      exchangeRates = await getExchangeRates();
+    } catch {
+      exchangeRates = null;
+    }
+  }
+  const displayPrice = remoteProject
+    ? formatProjectPrice(remoteProject.priceLabel, locale, exchangeRates)
+    : details.onRequest;
   const thirdFact = remoteProject?.lotSize
-    ? { label: details.lotSize, value: remoteProject.lotSize }
+    ? { label: details.lotSize, value: formatLotSize(remoteProject.lotSize, locale) }
     : { label: details.archive, value: details.images(galleryImages.length) };
 
   return (
@@ -130,7 +145,7 @@ export async function ProjectPage({ locale, citySlug, projectSlug }: { locale: L
 
       <section className="section project-overview"><div className="site-shell project-overview-grid"><div><p className="eyebrow">{copy.project.overview}</p><h2>{project.summary}</h2></div><div className="project-description"><p>{project.description}</p><ul>{project.features.map((feature) => <li key={feature}><Check aria-hidden="true" /> {feature}</li>)}</ul><Button asChild size="lg" className="button-red"><a href={projectWhatsapp} target="_blank" rel="noreferrer"><MessageCircle aria-hidden="true" /> {copy.project.request}</a></Button></div></div></section>
 
-      <section className="project-facts-section"><div className="site-shell"><p className="eyebrow">{details.details}</p><div className="project-facts-grid"><article><span>01</span><small>{details.profile}</small><strong>{project.label}</strong></article><article><span>02</span><small>{details.location}</small><strong>{remoteProject?.address || `${city.name}, MG`}</strong></article><article><span>03</span><small>{thirdFact.label}</small><strong>{thirdFact.value}</strong></article><article><span>04</span><small>{details.availability}</small><strong>{remoteProject?.priceLabel || details.onRequest}</strong></article></div>{remoteProject?.mapUrl && <a className="project-map-link" href={remoteProject.mapUrl} target="_blank" rel="noreferrer"><MapPin /> Abrir localização no mapa <ArrowUpRight /></a>}</div></section>
+      <section className="project-facts-section"><div className="site-shell"><p className="eyebrow">{details.details}</p><div className="project-facts-grid"><article><span>01</span><small>{details.profile}</small><strong>{project.label}</strong></article><article><span>02</span><small>{details.location}</small><strong>{remoteProject?.address || `${city.name}, MG`}</strong></article><article><span>03</span><small>{thirdFact.label}</small><strong>{thirdFact.value}</strong></article><article><span>04</span><small>{details.availability}</small><strong>{displayPrice}</strong></article></div>{remoteProject?.mapUrl && <a className="project-map-link" href={remoteProject.mapUrl} target="_blank" rel="noreferrer"><MapPin /> {details.openMap} <ArrowUpRight /></a>}</div></section>
 
       {remoteProject?.videoUrl && <section id="video" className="section project-video-section"><div className="site-shell"><div className="section-heading split-heading"><div><p className="eyebrow">{details.videoEyebrow}</p><h2>{details.videoTitle}</h2></div><PlayCircle aria-hidden="true" /></div><div className="project-video-frame">{embedUrl ? <iframe src={embedUrl} title={`${details.videoTitle} ${project.name}`} loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen /> : <video src={remoteProject.videoUrl} controls playsInline preload="metadata" poster={project.image} />}</div></div></section>}
 

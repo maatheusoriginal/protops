@@ -7,6 +7,7 @@ import {
   Archive,
   ArrowUpRight,
   Building2,
+  Calculator,
   CheckCircle2,
   Clock3,
   Copy,
@@ -46,15 +47,31 @@ import {
 } from "@/lib/cms-model";
 import {
   ensureSeedCmsData,
+  getAdminExchangeRates,
   removeCmsProject,
   saveCmsCity,
   saveCmsProject,
+  searchAdminAddresses,
   subscribeCmsData,
   translateCityContent,
   translateProjectContent,
   uploadProjectImages,
+  type AddressSearchResult,
 } from "@/lib/firebase/admin-cms";
 import { firebaseAuth } from "@/lib/firebase/client";
+import {
+  buildOsmEmbedUrl,
+  buildOsmMapUrl,
+  encodeLotSize,
+  encodeProjectPrice,
+  formatProjectPrice,
+  parseLotSize,
+  parseOsmCoordinates,
+  parseProjectPrice,
+  type ExchangeRates,
+  type LotMode,
+  type PriceMode,
+} from "@/lib/project-commercial";
 
 type AdminView = "overview" | "projects" | "cities" | "media" | "settings";
 
@@ -237,8 +254,204 @@ function contentFingerprint(value: unknown) {
   return JSON.stringify(value ?? {});
 }
 
+function parsePositiveDecimal(value: string) {
+  const cleaned = value.trim().replace(/\s/g, "").replace(/[^\d,.]/g, "");
+  const normalized = cleaned.includes(",") && cleaned.includes(".")
+    ? cleaned.lastIndexOf(",") > cleaned.lastIndexOf(".")
+      ? cleaned.replace(/\./g, "").replace(",", ".")
+      : cleaned.replace(/,/g, "")
+    : cleaned.replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function decimalFieldValue(value: number) {
+  return value > 0 ? String(value).replace(".", ",") : "";
+}
+
+function moneyFieldValue(amountCents: number) {
+  if (amountCents <= 0) return "";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amountCents / 100);
+}
+
+function ProjectCommercialDetails({
+  form,
+  setForm,
+  cities,
+}: {
+  form: CmsProject;
+  setForm: React.Dispatch<React.SetStateAction<CmsProject>>;
+  cities: CmsCity[];
+}) {
+  const [priceMode, setPriceMode] = useState<PriceMode>(() => parseProjectPrice(form.priceLabel).mode);
+  const [amountCents, setAmountCents] = useState(() => parseProjectPrice(form.priceLabel).amountCents);
+  const initialLot = parseLotSize(form.lotSize);
+  const [lotMode, setLotMode] = useState<LotMode>(initialLot.mode);
+  const [lotArea, setLotArea] = useState(() => decimalFieldValue(initialLot.area));
+  const [lotWidth, setLotWidth] = useState(() => decimalFieldValue(initialLot.width));
+  const [lotLength, setLotLength] = useState(() => decimalFieldValue(initialLot.length));
+  const [rates, setRates] = useState<ExchangeRates | null>(null);
+  const [ratesLoading, setRatesLoading] = useState(true);
+  const [ratesError, setRatesError] = useState("");
+  const [addressQuery, setAddressQuery] = useState(form.address);
+  const [addressResults, setAddressResults] = useState<AddressSearchResult[]>([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [addressError, setAddressError] = useState("");
+  const [addressSearched, setAddressSearched] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getAdminExchangeRates()
+      .then((nextRates) => {
+        if (active) setRates(nextRates);
+      })
+      .catch((error) => {
+        if (active) setRatesError(error instanceof Error ? error.message : "Cotações indisponíveis.");
+      })
+      .finally(() => {
+        if (active) setRatesLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
+
+  function changePriceMode(nextMode: PriceMode) {
+    setPriceMode(nextMode);
+    setForm((current) => ({ ...current, priceLabel: encodeProjectPrice(nextMode, amountCents) }));
+  }
+
+  function changePrice(value: string) {
+    const digits = value.replace(/\D/g, "");
+    const nextAmount = digits ? Number(digits) : 0;
+    setAmountCents(nextAmount);
+    setForm((current) => ({ ...current, priceLabel: encodeProjectPrice(priceMode, nextAmount) }));
+  }
+
+  function changeLotMode(nextMode: LotMode) {
+    setLotMode(nextMode);
+    setForm((current) => ({
+      ...current,
+      lotSize: encodeLotSize(nextMode, {
+        area: parsePositiveDecimal(lotArea),
+        width: parsePositiveDecimal(lotWidth),
+        length: parsePositiveDecimal(lotLength),
+      }),
+    }));
+  }
+
+  function changeLotArea(value: string) {
+    setLotArea(value);
+    setForm((current) => ({ ...current, lotSize: encodeLotSize("area", { area: parsePositiveDecimal(value) }) }));
+  }
+
+  function changeLotDimension(field: "width" | "length", value: string) {
+    const width = field === "width" ? value : lotWidth;
+    const length = field === "length" ? value : lotLength;
+    if (field === "width") setLotWidth(value);
+    else setLotLength(value);
+    setForm((current) => ({
+      ...current,
+      lotSize: encodeLotSize("dimensions", {
+        width: parsePositiveDecimal(width),
+        length: parsePositiveDecimal(length),
+      }),
+    }));
+  }
+
+  function updateFeature(index: number, value: string) {
+    setForm((current) => ({
+      ...current,
+      features: current.features.map((item, itemIndex) => itemIndex === index ? value : item),
+    }));
+  }
+
+  function removeFeature(index: number) {
+    setForm((current) => ({
+      ...current,
+      features: current.features.length === 1
+        ? [""]
+        : current.features.filter((_, itemIndex) => itemIndex !== index),
+    }));
+  }
+
+  async function findAddress() {
+    const query = addressQuery.trim();
+    if (query.length < 3) {
+      setAddressError("Digite ao menos três caracteres para buscar.");
+      return;
+    }
+    const city = cities.find((item) => item.slug === form.citySlug);
+    const contextualQuery = [query, city?.name, city?.state, "Brasil"].filter(Boolean).join(", ");
+    setAddressLoading(true);
+    setAddressError("");
+    setAddressSearched(true);
+    try {
+      setAddressResults(await searchAdminAddresses(contextualQuery));
+    } catch (error) {
+      setAddressResults([]);
+      setAddressError(error instanceof Error ? error.message : "Não foi possível buscar o endereço.");
+    } finally {
+      setAddressLoading(false);
+    }
+  }
+
+  function selectAddress(result: AddressSearchResult) {
+    setAddressQuery(result.displayName);
+    setAddressResults([]);
+    setAddressError("");
+    setForm((current) => ({
+      ...current,
+      address: result.displayName,
+      mapUrl: buildOsmMapUrl(result.latitude, result.longitude),
+    }));
+  }
+
+  const dimensionsArea = parsePositiveDecimal(lotWidth) * parsePositiveDecimal(lotLength);
+  const coordinates = parseOsmCoordinates(form.mapUrl);
+  const encodedPrice = encodeProjectPrice(priceMode, amountCents);
+  const currencyPreviews = [
+    { label: "Brasil", code: "BRL", value: formatProjectPrice(encodedPrice, "pt", rates) },
+    { label: "Inglês e espanhol", code: "USD", value: formatProjectPrice(encodedPrice, "en", rates) },
+    { label: "Francês e alemão", code: "EUR", value: formatProjectPrice(encodedPrice, "fr", rates) },
+    { label: "Chinês", code: "CNY", value: formatProjectPrice(encodedPrice, "zh", rates) },
+  ];
+
+  return <section className="admin-form-card admin-commercial-card"><div className="admin-form-heading"><span>03</span><div><h2>Detalhes comerciais</h2><p>Preço, metragem, diferenciais e localização apresentados ao visitante.</p></div></div>
+    <div className="admin-commercial-block"><div className="admin-field-title"><strong>Condição ou preço</strong><span>O valor-base é cadastrado em reais e convertido automaticamente no site.</span></div><div className="admin-choice-group" role="group" aria-label="Condição do preço"><button type="button" className={priceMode === "consultation" ? "active" : ""} onClick={() => changePriceMode("consultation")} aria-pressed={priceMode === "consultation"}>Sob consulta</button><button type="button" className={priceMode === "from" ? "active" : ""} onClick={() => changePriceMode("from")} aria-pressed={priceMode === "from"}>A partir de</button><button type="button" className={priceMode === "fixed" ? "active" : ""} onClick={() => changePriceMode("fixed")} aria-pressed={priceMode === "fixed"}>Valor cheio</button></div>
+      {priceMode !== "consultation" && <><label className="admin-field admin-money-field"><span>Valor em reais (BRL) *</span><input inputMode="numeric" value={moneyFieldValue(amountCents)} onChange={(event) => changePrice(event.target.value)} placeholder="R$ 0,00" required /></label>{amountCents > 0 && <div className="admin-currency-preview">{currencyPreviews.map((item) => <article key={item.code}><span>{item.label}</span><small>{item.code}</small><strong>{item.code !== "BRL" && ratesLoading ? "Atualizando…" : item.value}</strong></article>)}</div>}{ratesError && <p className="admin-helper-error">{ratesError} O valor em reais continuará disponível.</p>}{rates?.date && <p className="admin-helper-note">Conversões aproximadas pela cotação de {new Intl.DateTimeFormat("pt-BR", { timeZone: "UTC" }).format(new Date(`${rates.date}T12:00:00Z`))}.</p>}</>}
+    </div>
+
+    <div className="admin-commercial-block"><div className="admin-field-title"><strong>Área dos lotes</strong><span>Informe a área pronta ou deixe o painel calcular pelas dimensões.</span></div><div className="admin-choice-group" role="group" aria-label="Forma de informar a área"><button type="button" className={lotMode === "area" ? "active" : ""} onClick={() => changeLotMode("area")} aria-pressed={lotMode === "area"}>Área total</button><button type="button" className={lotMode === "dimensions" ? "active" : ""} onClick={() => changeLotMode("dimensions")} aria-pressed={lotMode === "dimensions"}>Largura × comprimento</button></div>
+      {lotMode === "area" ? <label className="admin-field admin-measure-field"><span>Área total em m²</span><div><input inputMode="decimal" value={lotArea} onChange={(event) => changeLotArea(event.target.value)} placeholder="250" /><i>m²</i></div></label> : <div className="admin-dimensions-grid"><label className="admin-field admin-measure-field"><span>Largura</span><div><input inputMode="decimal" value={lotWidth} onChange={(event) => changeLotDimension("width", event.target.value)} placeholder="10" /><i>m</i></div></label><span className="admin-dimension-sign">×</span><label className="admin-field admin-measure-field"><span>Comprimento</span><div><input inputMode="decimal" value={lotLength} onChange={(event) => changeLotDimension("length", event.target.value)} placeholder="25" /><i>m</i></div></label>{dimensionsArea > 0 && <div className="admin-calculation-result"><Calculator /><span><small>Área calculada automaticamente</small><strong>{new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(dimensionsArea)} m²</strong></span></div>}</div>}
+    </div>
+
+    <div className="admin-commercial-block"><div className="admin-field-title"><strong>Diferenciais</strong><span>Adicione um item por campo para manter a apresentação organizada.</span></div><div className="admin-feature-list">{form.features.map((feature, index) => <div className="admin-feature-row" key={index}><span>{String(index + 1).padStart(2, "0")}</span><input value={feature} onChange={(event) => updateFeature(index, event.target.value)} placeholder="Ex.: Infraestrutura completa" /><button type="button" onClick={() => removeFeature(index)} aria-label={`Remover diferencial ${index + 1}`}><X /></button></div>)}</div><button type="button" className="admin-add-feature" onClick={() => setForm((current) => ({ ...current, features: [...current.features, ""] }))} disabled={form.features.length >= 20}><Plus /> Adicionar mais um diferencial</button></div>
+
+    <div className="admin-commercial-block"><div className="admin-field-title"><strong>Endereço ou referência</strong><span>Pesquise e escolha um resultado para posicionar o empreendimento no mapa.</span></div><div className="admin-address-search"><input value={addressQuery} onChange={(event) => { setAddressQuery(event.target.value); setAddressResults([]); setAddressSearched(false); setAddressError(""); setForm((current) => ({ ...current, address: event.target.value, mapUrl: "" })); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void findAddress(); } }} placeholder="Rua, avenida, bairro ou ponto de referência" /><Button type="button" variant="outline" onClick={findAddress} disabled={addressLoading}>{addressLoading ? <LoaderCircle className="admin-spin" /> : <Search />} {addressLoading ? "Buscando…" : "Buscar endereço"}</Button></div>{addressError && <p className="admin-helper-error">{addressError}</p>}{addressSearched && !addressLoading && !addressError && addressResults.length === 0 && <p className="admin-helper-note">Nenhum endereço encontrado. Tente incluir o bairro ou o nome da via.</p>}{addressResults.length > 0 && <div className="admin-address-results">{addressResults.map((result) => <button type="button" key={result.id} onClick={() => selectAddress(result)}><MapPinned /><span>{result.displayName}</span><ArrowUpRight /></button>)}</div>}
+      {coordinates && <div className="admin-map-preview"><iframe src={buildOsmEmbedUrl(coordinates.latitude, coordinates.longitude)} title="Prévia da localização do empreendimento" loading="lazy" /><div><MapPinned /><span><strong>Localização selecionada</strong><small>{form.address}</small></span><a href={form.mapUrl} target="_blank" rel="noreferrer">Abrir mapa <ArrowUpRight /></a></div><p>Mapa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">colaboradores do OpenStreetMap</a></p></div>}
+    </div>
+  </section>;
+}
+
 function ProjectEditor({ project, cities, onCancel, onSave, onUpload, saving }: { project: CmsProject; cities: CmsCity[]; onCancel: () => void; onSave: (project: CmsProject) => Promise<void>; onUpload: (project: Pick<CmsProject, "id" | "citySlug" | "slug">, files: File[]) => Promise<string[]>; saving: boolean }) {
-  const [form, setForm] = useState<CmsProject>(project);
+  const [form, setForm] = useState<CmsProject>(() => {
+    const parsedPrice = parseProjectPrice(project.priceLabel);
+    const parsedLot = parseLotSize(project.lotSize);
+    return {
+      ...project,
+      priceLabel: encodeProjectPrice(parsedPrice.mode, parsedPrice.amountCents),
+      lotSize: project.lotSize
+        ? encodeLotSize(parsedLot.mode, parsedLot.mode === "dimensions"
+          ? { width: parsedLot.width, length: parsedLot.length }
+          : { area: parsedLot.area })
+        : "",
+      features: project.features.length ? project.features : [""],
+    };
+  });
   const [pendingMedia, setPendingMedia] = useState<string[]>([]);
   const [translating, setTranslating] = useState(false);
   const projectHasTranslations = automaticLocales.every((item) => Boolean(project.translations[item.code]?.description));
@@ -307,7 +520,11 @@ function ProjectEditor({ project, cities, onCancel, onSave, onUpload, saving }: 
     if (!name || !form.citySlug) return;
     setTranslating(true);
     try {
-      let next = { ...form, slug: form.slug || slugify(name) };
+      let next = {
+        ...form,
+        slug: form.slug || slugify(name),
+        features: form.features.map((item) => item.trim()).filter(Boolean),
+      };
       if (!translationsCurrent) next = await addAutomaticTranslations(next);
       await onSave(next);
     } catch (error) {
@@ -325,12 +542,13 @@ function ProjectEditor({ project, cities, onCancel, onSave, onUpload, saving }: 
 
       <section className="admin-form-card"><div className="admin-form-heading"><span>02</span><div><h2>Conteúdo em português</h2><p>Você escreve uma vez; o painel gera automaticamente os outros cinco idiomas.</p></div></div><div className="admin-field-grid"><label className="admin-field admin-field-wide"><span>Nome exibido no site</span><input value={translation.name} onChange={(event) => updateTranslation("name", event.target.value)} placeholder="Nome oficial do empreendimento" /></label><label className="admin-field admin-field-wide"><span>Resumo comercial</span><textarea rows={3} value={translation.summary} onChange={(event) => updateTranslation("summary", event.target.value)} placeholder="Uma frase curta e vendável para o card e o topo da página." /></label><label className="admin-field admin-field-wide"><span>Descrição completa</span><textarea rows={7} value={translation.description} onChange={(event) => updateTranslation("description", event.target.value)} placeholder="Conte a proposta, localização, infraestrutura e diferenciais do empreendimento." /></label></div><div className={`admin-translation-box ${translationsCurrent ? "is-ready" : ""}`}><div><Languages /><span><strong>{translationsCurrent ? "Traduções atualizadas" : "Tradução automática pendente"}</strong><small>{translationsCurrent ? "O conteúdo está pronto nos seis idiomas do site." : "Ao salvar, inglês, espanhol, francês, alemão e chinês serão gerados automaticamente."}</small></span></div><div className="admin-translation-locales">{automaticLocales.map((item) => <span key={item.code} className={form.translations[item.code]?.name && translationsCurrent ? "complete" : ""}>{item.code.toUpperCase()}</span>)}</div><Button type="button" variant="outline" onClick={handleTranslate} disabled={busy}><Sparkles /> {translating ? "Traduzindo…" : "Traduzir agora"}</Button></div></section>
 
-      <section className="admin-form-card"><div className="admin-form-heading"><span>03</span><div><h2>Detalhes comerciais</h2><p>Informações que ajudam o visitante a decidir pelo contato.</p></div></div><div className="admin-field-grid"><label className="admin-field"><span>Condição ou preço</span><input value={form.priceLabel} onChange={(event) => setForm({ ...form, priceLabel: event.target.value })} placeholder="Ex.: A partir de R$ 120 mil" /></label><label className="admin-field"><span>Área dos lotes</span><input value={form.lotSize} onChange={(event) => setForm({ ...form, lotSize: event.target.value })} placeholder="Ex.: A partir de 250 m²" /></label><label className="admin-field admin-field-wide"><span>Endereço ou referência</span><input value={form.address} onChange={(event) => setForm({ ...form, address: event.target.value })} placeholder="Bairro, avenida ou ponto de referência" /></label><label className="admin-field admin-field-wide"><span>Diferenciais — um por linha</span><textarea rows={5} value={form.features.join("\n")} onChange={(event) => setForm({ ...form, features: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })} placeholder={"Infraestrutura completa\nAcesso facilitado\nCondições especiais"} /></label><label className="admin-field admin-field-wide"><span>Link do mapa</span><input value={form.mapUrl} onChange={(event) => setForm({ ...form, mapUrl: event.target.value })} placeholder="https://maps.google.com/..." /></label></div></section>
+      <ProjectCommercialDetails form={form} setForm={setForm} cities={cities} />
     </div>
 
     <aside className="admin-editor-side"><section className="admin-form-card admin-media-card"><div className="admin-form-heading"><span>04</span><div><h2>Fotos e vídeo</h2><p>Monte a capa, a galeria e o vídeo do empreendimento.</p></div></div><label className={`admin-upload-zone ${pendingMedia.length ? "is-uploading" : ""}`}>{pendingMedia.length ? <LoaderCircle className="admin-spin" /> : <UploadCloud />}<strong>{pendingMedia.length ? "Enviando para a Cloudinary…" : "Adicionar fotos"}</strong><span>Selecione várias imagens · JPG, PNG ou WebP · até 15 MB cada</span><input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={pendingMedia.length > 0} onChange={(event) => { handleMedia(event.target.files); event.currentTarget.value = ""; }} /></label>{pendingMedia.length > 0 && <p className="admin-pending-media">Otimizando e enviando {pendingMedia.length} arquivo(s).</p>}<label className="admin-field"><span>Ou cole uma URL de capa</span><input value={form.heroImage} onChange={(event) => setForm({ ...form, heroImage: event.target.value })} placeholder="https://.../imagem.webp" /></label><div className="admin-video-input"><label className="admin-field"><span>Vídeo do empreendimento</span><input value={form.videoUrl} onChange={(event) => setForm({ ...form, videoUrl: event.target.value })} placeholder="Link do YouTube, Vimeo ou MP4" /></label>{form.videoUrl && <a href={form.videoUrl} target="_blank" rel="noreferrer"><PlayCircle /> Testar vídeo</a>}</div><div className="admin-media-preview">{form.heroImage && <figure className="admin-media-cover"><img src={form.heroImage} alt="Prévia da capa" /><figcaption>Capa principal</figcaption><button type="button" onClick={removeCover} aria-label="Remover imagem de capa"><X /></button></figure>}{form.gallery.map((image, index) => <figure key={`${image.slice(0, 60)}-${index}`}><img src={image} alt={`Galeria ${index + 1}`} /><div className="admin-media-actions"><button type="button" onClick={() => setGalleryImageAsCover(index)} aria-label="Usar como capa"><Star /></button><button type="button" onClick={() => setForm((current) => ({ ...current, gallery: current.gallery.filter((_, itemIndex) => itemIndex !== index) }))} aria-label="Remover imagem"><X /></button></div></figure>)}</div>{form.gallery.length > 0 && <p className="admin-media-count">{form.gallery.length} foto(s) na galeria. Use a estrela para trocar a capa.</p>}</section>
       <section className="admin-form-card admin-publish-card"><Globe2 /><div><h3>Publicação</h3><p>Ao salvar, o conteúdo é traduzido e sincronizado com todas as versões do site.</p></div><StatusBadge status={form.status} /></section>
     </aside></div>
+    <div className="admin-editor-bottom"><div><strong>Cadastro pronto?</strong><span>Salve para atualizar o empreendimento e todas as versões de idioma.</span></div><Button type="submit" className="admin-primary" disabled={busy}>{busy ? <LoaderCircle className="admin-spin" /> : <Save />} {translating ? "Traduzindo…" : saving ? "Salvando…" : pendingMedia.length ? "Enviando fotos…" : "Salvar empreendimento"}</Button></div>
   </form>;
 }
 

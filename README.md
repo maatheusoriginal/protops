@@ -21,6 +21,9 @@ O repositório está conectado à Vercel. Cada atualização da branch `main` ge
 - Cadastro em português com tradução automática para os outros 5 idiomas
 - Upload assinado de imagens para a Cloudinary
 - Vídeos por empreendimento via YouTube, Vimeo ou MP4
+- Preços estruturados com conversão automática de BRL para USD, EUR e CNY
+- Cálculo automático da área do lote por largura e comprimento
+- Busca de endereço e prévia de mapa no cadastro
 - Publicação em tempo real por meio do Cloud Firestore
 
 ## Rotas e idiomas
@@ -54,6 +57,8 @@ Os demais idiomas recebem um prefixo:
 - Firebase Authentication e Cloud Firestore
 - Cloudinary para imagens
 - DeepL API Free para tradução automática
+- Frankfurter para cotações diárias, sem chave de API
+- OpenStreetMap e Nominatim para endereços e mapas, sem chave de API
 - Radix UI / shadcn
 - pnpm
 
@@ -82,6 +87,8 @@ CLOUDINARY_API_KEY
 CLOUDINARY_API_SECRET
 DEEPL_API_KEY
 ```
+
+As integrações de câmbio e mapa não exigem chave. Opcionalmente, `NOMINATIM_BASE_URL` permite trocar o servidor de geocodificação no futuro sem alterar o painel.
 
 A chave gratuita pode ser criada em [DeepL for Developers](https://www.deepl.com/pro-api). O plano API Free disponibiliza até 500 mil caracteres traduzidos por mês.
 Nunca exponha `CLOUDINARY_API_SECRET` ou `DEEPL_API_KEY` com o prefixo `NEXT_PUBLIC_`.

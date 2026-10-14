@@ -27,6 +27,14 @@ import {
 } from "@/lib/cms-model";
 import { firebaseAuth, firebaseDb } from "@/lib/firebase/client";
 import type { Locale } from "@/lib/i18n";
+import type { ExchangeRates } from "@/lib/project-commercial";
+
+export type AddressSearchResult = {
+  id: string;
+  displayName: string;
+  latitude: number;
+  longitude: number;
+};
 
 const MAX_IMAGE_SIZE = 15 * 1024 * 1024;
 const translatedLocales: Exclude<Locale, "pt">[] = ["en", "es", "fr", "de", "zh"];
@@ -263,6 +271,37 @@ export function translateProjectContent(source: CmsProjectTranslation) {
 
 export function translateCityContent(source: CmsCityTranslation) {
   return requestAutomaticTranslations<CmsCityTranslation>("city", source);
+}
+
+export async function getAdminExchangeRates() {
+  requireUserId();
+  const token = await firebaseAuth.currentUser!.getIdToken();
+  const response = await fetch("/api/admin/exchange-rates", {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  const result = await response.json() as { error?: string; rates?: ExchangeRates };
+  if (!response.ok || !result.rates) {
+    throw new Error(result.error || "Não foi possível consultar as cotações.");
+  }
+  return result.rates;
+}
+
+export async function searchAdminAddresses(query: string) {
+  requireUserId();
+  const token = await firebaseAuth.currentUser!.getIdToken();
+  const response = await fetch("/api/admin/geocode", {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ query }),
+  });
+  const result = await response.json() as { error?: string; results?: AddressSearchResult[] };
+  if (!response.ok || !result.results) {
+    throw new Error(result.error || "Não foi possível localizar esse endereço.");
+  }
+  return result.results;
 }
 
 export async function ensureSeedCmsData() {
