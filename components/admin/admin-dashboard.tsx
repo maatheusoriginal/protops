@@ -385,12 +385,11 @@ function ProjectCommercialDetails({
       return;
     }
     const city = cities.find((item) => item.slug === form.citySlug);
-    const contextualQuery = [query, city?.name, city?.state, "Brasil"].filter(Boolean).join(", ");
     setAddressLoading(true);
     setAddressError("");
     setAddressSearched(true);
     try {
-      setAddressResults(await searchAdminAddresses(contextualQuery));
+      setAddressResults(await searchAdminAddresses(query, { city: city?.name, state: city?.state }));
     } catch (error) {
       setAddressResults([]);
       setAddressError(error instanceof Error ? error.message : "Não foi possível buscar o endereço.");
@@ -400,12 +399,20 @@ function ProjectCommercialDetails({
   }
 
   function selectAddress(result: AddressSearchResult) {
-    setAddressQuery(result.displayName);
+    const city = cities.find((item) => item.slug === form.citySlug);
+    const typedAddress = addressQuery.trim();
+    const normalizedAddress = typedAddress.toLocaleLowerCase("pt-BR");
+    const savedAddress = [
+      typedAddress,
+      city?.name && !normalizedAddress.includes(city.name.toLocaleLowerCase("pt-BR")) ? city.name : "",
+      city?.state && !normalizedAddress.includes(city.state.toLocaleLowerCase("pt-BR")) ? city.state : "",
+    ].filter(Boolean).join(", ");
+    setAddressQuery(savedAddress);
     setAddressResults([]);
     setAddressError("");
     setForm((current) => ({
       ...current,
-      address: result.displayName,
+      address: savedAddress,
       mapUrl: buildOsmMapUrl(result.latitude, result.longitude),
     }));
   }

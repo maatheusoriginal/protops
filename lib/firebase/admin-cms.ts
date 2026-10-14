@@ -286,7 +286,10 @@ export async function getAdminExchangeRates() {
   return result.rates;
 }
 
-export async function searchAdminAddresses(query: string) {
+export async function searchAdminAddresses(
+  query: string,
+  context?: { city?: string; state?: string },
+) {
   requireUserId();
   const token = await firebaseAuth.currentUser!.getIdToken();
   const response = await fetch("/api/admin/geocode", {
@@ -295,7 +298,7 @@ export async function searchAdminAddresses(query: string) {
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, city: context?.city, state: context?.state }),
   });
   const result = await response.json() as { error?: string; results?: AddressSearchResult[] };
   if (!response.ok || !result.results) {
