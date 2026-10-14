@@ -23,7 +23,8 @@ O repositório está conectado à Vercel. Cada atualização da branch `main` ge
 - Vídeos por empreendimento via YouTube, Vimeo ou MP4
 - Preços estruturados com conversão automática de BRL para USD, EUR e CNY
 - Cálculo automático da área do lote por largura e comprimento
-- Busca de endereço e prévia de mapa no cadastro
+- Consulta oficial de CEP pelo ViaCEP e busca de endereço pelo OpenStreetMap
+- Mapa interativo no cadastro, com pino ajustável para marcar o ponto exato do lote
 - Publicação em tempo real por meio do Cloud Firestore
 
 ## Rotas e idiomas
@@ -58,7 +59,8 @@ Os demais idiomas recebem um prefixo:
 - Cloudinary para imagens
 - DeepL API Free para tradução automática
 - Frankfurter para cotações diárias, sem chave de API
-- OpenStreetMap e Nominatim para endereços e mapas, sem chave de API
+- ViaCEP para consulta oficial de CEP, sem chave de API
+- OpenStreetMap, Nominatim e Leaflet para endereços e mapas, sem chave de API
 - Radix UI / shadcn
 - pnpm
 
@@ -88,7 +90,9 @@ CLOUDINARY_API_SECRET
 DEEPL_API_KEY
 ```
 
-As integrações de câmbio e mapa não exigem chave. Opcionalmente, `NOMINATIM_BASE_URL` permite trocar o servidor de geocodificação no futuro sem alterar o painel.
+As integrações de câmbio, CEP e mapa não exigem chave. Opcionalmente, `NOMINATIM_BASE_URL` permite trocar o servidor de geocodificação no futuro sem alterar o painel.
+
+O ViaCEP confirma logradouro, bairro, cidade e estado. Como bases gratuitas nem sempre possuem cada número de imóvel, o painel identifica quando o resultado corresponde apenas ao trecho da rua e permite arrastar o pino — ou tocar no mapa — até a posição exata do empreendimento.
 
 A chave gratuita pode ser criada em [DeepL for Developers](https://www.deepl.com/pro-api). O plano API Free disponibiliza até 500 mil caracteres traduzidos por mês.
 Nunca exponha `CLOUDINARY_API_SECRET` ou `DEEPL_API_KEY` com o prefixo `NEXT_PUBLIC_`.

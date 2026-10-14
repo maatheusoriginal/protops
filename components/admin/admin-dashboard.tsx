@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { signOut } from "firebase/auth";
 import {
@@ -60,7 +60,6 @@ import {
 } from "@/lib/firebase/admin-cms";
 import { firebaseAuth } from "@/lib/firebase/client";
 import {
-  buildOsmEmbedUrl,
   buildOsmMapUrl,
   encodeLotSize,
   encodeProjectPrice,
@@ -279,6 +278,69 @@ function moneyFieldValue(amountCents: number) {
   }).format(amountCents / 100);
 }
 
+function AdminLocationMap({
+  latitude,
+  longitude,
+  onChange,
+}: {
+  latitude: number;
+  longitude: number;
+  onChange: (latitude: number, longitude: number) => void;
+}) {
+  const mapRootRef = useRef<HTMLDivElement>(null);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    let disposed = false;
+    let map: import("leaflet").Map | null = null;
+
+    void import("leaflet").then((Leaflet) => {
+      if (disposed || !mapRootRef.current) return;
+      map = Leaflet.map(mapRootRef.current, {
+        center: [latitude, longitude],
+        zoom: 18,
+        scrollWheelZoom: false,
+      });
+      Leaflet.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 19,
+      }).addTo(map);
+      const icon = Leaflet.divIcon({
+        className: "admin-location-pin",
+        html: "<span></span>",
+        iconSize: [34, 42],
+        iconAnchor: [17, 40],
+      });
+      const marker = Leaflet.marker([latitude, longitude], {
+        draggable: true,
+        autoPan: true,
+        icon,
+        title: "Arraste para ajustar a localização",
+      }).addTo(map);
+      marker.on("dragend", () => {
+        const position = marker.getLatLng();
+        onChangeRef.current(position.lat, position.lng);
+      });
+      map.on("click", (event: import("leaflet").LeafletMouseEvent) => {
+        marker.setLatLng(event.latlng);
+        onChangeRef.current(event.latlng.lat, event.latlng.lng);
+      });
+      window.setTimeout(() => map?.invalidateSize(), 0);
+    });
+
+    return () => {
+      disposed = true;
+      map?.remove();
+    };
+  }, [latitude, longitude]);
+
+  return <div className="admin-map-picker"><div ref={mapRootRef} className="admin-map-picker-canvas" /><p><MapPinned /> Arraste o pino ou toque no mapa para marcar o ponto exato do empreendimento.</p></div>;
+}
+
 function ProjectCommercialDetails({
   form,
   setForm,
@@ -303,6 +365,7 @@ function ProjectCommercialDetails({
   const [addressLoading, setAddressLoading] = useState(false);
   const [addressError, setAddressError] = useState("");
   const [addressSearched, setAddressSearched] = useState(false);
+  const [locationPrecision, setLocationPrecision] = useState<"exact" | "postal" | "street" | "manual" | "">("");
 
   useEffect(() => {
     let active = true;
@@ -402,14 +465,15 @@ function ProjectCommercialDetails({
     const city = cities.find((item) => item.slug === form.citySlug);
     const typedAddress = addressQuery.trim();
     const normalizedAddress = typedAddress.toLocaleLowerCase("pt-BR");
-    const savedAddress = [
-      typedAddress,
-      city?.name && !normalizedAddress.includes(city.name.toLocaleLowerCase("pt-BR")) ? city.name : "",
-      city?.state && !normalizedAddress.includes(city.state.toLocaleLowerCase("pt-BR")) ? city.state : "",
-    ].filter(Boolean).join(", ");
+    const savedAddress = result.verifiedAddress || [
+        typedAddress,
+        city?.name && !normalizedAddress.includes(city.name.toLocaleLowerCase("pt-BR")) ? city.name : "",
+        city?.state && !normalizedAddress.includes(city.state.toLocaleLowerCase("pt-BR")) ? city.state : "",
+      ].filter(Boolean).join(", ");
     setAddressQuery(savedAddress);
     setAddressResults([]);
     setAddressError("");
+    setLocationPrecision(result.precision ?? "street");
     setForm((current) => ({
       ...current,
       address: savedAddress,
@@ -438,8 +502,8 @@ function ProjectCommercialDetails({
 
     <div className="admin-commercial-block"><div className="admin-field-title"><strong>Diferenciais</strong><span>Adicione um item por campo para manter a apresentação organizada.</span></div><div className="admin-feature-list">{form.features.map((feature, index) => <div className="admin-feature-row" key={index}><span>{String(index + 1).padStart(2, "0")}</span><input value={feature} onChange={(event) => updateFeature(index, event.target.value)} placeholder="Ex.: Infraestrutura completa" /><button type="button" onClick={() => removeFeature(index)} aria-label={`Remover diferencial ${index + 1}`}><X /></button></div>)}</div><button type="button" className="admin-add-feature" onClick={() => setForm((current) => ({ ...current, features: [...current.features, ""] }))} disabled={form.features.length >= 20}><Plus /> Adicionar mais um diferencial</button></div>
 
-    <div className="admin-commercial-block"><div className="admin-field-title"><strong>Endereço ou referência</strong><span>Pesquise e escolha um resultado para posicionar o empreendimento no mapa.</span></div><div className="admin-address-search"><input value={addressQuery} onChange={(event) => { setAddressQuery(event.target.value); setAddressResults([]); setAddressSearched(false); setAddressError(""); setForm((current) => ({ ...current, address: event.target.value, mapUrl: "" })); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void findAddress(); } }} placeholder="Rua, avenida, bairro ou ponto de referência" /><Button type="button" variant="outline" onClick={findAddress} disabled={addressLoading}>{addressLoading ? <LoaderCircle className="admin-spin" /> : <Search />} {addressLoading ? "Buscando…" : "Buscar endereço"}</Button></div>{addressError && <p className="admin-helper-error">{addressError}</p>}{addressSearched && !addressLoading && !addressError && addressResults.length === 0 && <p className="admin-helper-note">Nenhum endereço encontrado. Tente incluir o bairro ou o nome da via.</p>}{addressResults.length > 0 && <div className="admin-address-results">{addressResults.map((result) => <button type="button" key={result.id} onClick={() => selectAddress(result)}><MapPinned /><span>{result.displayName}</span><ArrowUpRight /></button>)}</div>}
-      {coordinates && <div className="admin-map-preview"><iframe src={buildOsmEmbedUrl(coordinates.latitude, coordinates.longitude)} title="Prévia da localização do empreendimento" loading="lazy" /><div><MapPinned /><span><strong>Localização selecionada</strong><small>{form.address}</small></span><a href={form.mapUrl} target="_blank" rel="noreferrer">Abrir mapa <ArrowUpRight /></a></div><p>Mapa © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">colaboradores do OpenStreetMap</a></p></div>}
+    <div className="admin-commercial-block"><div className="admin-field-title"><strong>Endereço ou referência</strong><span>Pesquise por endereço ou CEP. Quando o número não existir no mapa gratuito, ajuste o pino manualmente.</span></div><div className="admin-address-search"><input value={addressQuery} onChange={(event) => { setAddressQuery(event.target.value); setAddressResults([]); setAddressSearched(false); setAddressError(""); setLocationPrecision(""); setForm((current) => ({ ...current, address: event.target.value, mapUrl: "" })); }} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void findAddress(); } }} placeholder="Rua e número ou CEP" /><Button type="button" variant="outline" onClick={findAddress} disabled={addressLoading}>{addressLoading ? <LoaderCircle className="admin-spin" /> : <Search />} {addressLoading ? "Buscando…" : "Buscar endereço"}</Button></div>{addressError && <p className="admin-helper-error">{addressError}</p>}{addressSearched && !addressLoading && !addressError && addressResults.length === 0 && <p className="admin-helper-note">Nenhum endereço encontrado. Confira o CEP ou tente informar rua, número e bairro.</p>}{addressResults.length > 0 && <div className="admin-address-results">{addressResults.map((result) => <button type="button" key={result.id} onClick={() => selectAddress(result)}><MapPinned /><span className="admin-address-result-copy"><small>{result.precision === "exact" ? "Número localizado" : result.precision === "postal" ? "CEP confirmado pelo ViaCEP" : "Trecho da rua — ajuste o pino"}</small><strong>{result.displayName}</strong></span><ArrowUpRight /></button>)}</div>}
+      {coordinates && <div className="admin-map-preview"><AdminLocationMap latitude={coordinates.latitude} longitude={coordinates.longitude} onChange={(latitude, longitude) => { setLocationPrecision("manual"); setForm((current) => ({ ...current, mapUrl: buildOsmMapUrl(latitude, longitude) })); }} /><div className="admin-map-summary"><MapPinned /><span><strong>{locationPrecision === "manual" ? "Ponto ajustado manualmente" : locationPrecision === "postal" ? "CEP confirmado — confira o pino" : locationPrecision === "street" ? "Local aproximado — ajuste o pino" : "Localização selecionada"}</strong><small>{form.address}</small></span><a href={form.mapUrl} target="_blank" rel="noreferrer">Abrir mapa <ArrowUpRight /></a></div></div>}
     </div>
   </section>;
 }

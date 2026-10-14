@@ -32,6 +32,8 @@ import type { ExchangeRates } from "@/lib/project-commercial";
 export type AddressSearchResult = {
   id: string;
   displayName: string;
+  verifiedAddress?: string;
+  precision?: "exact" | "postal" | "street";
   latitude: number;
   longitude: number;
 };
