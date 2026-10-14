@@ -53,7 +53,7 @@ Os demais idiomas recebem um prefixo:
 - Vinext e Cloudflare Workers
 - Firebase Authentication e Cloud Firestore
 - Cloudinary para imagens
-- Gemini API para tradução automática
+- DeepL API Free para tradução automática
 - Radix UI / shadcn
 - pnpm
 
@@ -80,11 +80,11 @@ Cadastre em **Settings → Environment Variables** para Production, Preview e De
 CLOUDINARY_CLOUD_NAME
 CLOUDINARY_API_KEY
 CLOUDINARY_API_SECRET
-GEMINI_API_KEY
+DEEPL_API_KEY
 ```
 
-Opcionalmente, `GEMINI_MODEL` permite substituir o modelo padrão `gemini-3.5-flash-lite`.
-Nunca exponha `CLOUDINARY_API_SECRET` ou `GEMINI_API_KEY` com o prefixo `NEXT_PUBLIC_`.
+A chave gratuita pode ser criada em [DeepL for Developers](https://www.deepl.com/pro-api). O plano API Free disponibiliza até 500 mil caracteres traduzidos por mês.
+Nunca exponha `CLOUDINARY_API_SECRET` ou `DEEPL_API_KEY` com o prefixo `NEXT_PUBLIC_`.
 
 O painel autentica o administrador antes de gerar a assinatura da Cloudinary ou solicitar traduções. As fotos são enviadas diretamente à Cloudinary e somente suas URLs são salvas no Firestore. O Firebase Storage não é utilizado.
 
