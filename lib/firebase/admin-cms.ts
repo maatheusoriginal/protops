@@ -6,9 +6,7 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
   onSnapshot,
-  query,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -39,6 +37,7 @@ export type AddressSearchResult = {
 };
 
 const MAX_IMAGE_SIZE = 15 * 1024 * 1024;
+const CMS_SEED_VERSION = 2;
 const translatedLocales: Exclude<Locale, "pt">[] = ["en", "es", "fr", "de", "zh"];
 
 function requireUserId() {
@@ -313,30 +312,39 @@ export async function ensureSeedCmsData() {
   const uid = requireUserId();
   const markerRef = doc(firebaseDb, "settings", "cms");
   const marker = await getDoc(markerRef);
-  if (marker.exists()) return false;
+  const currentVersion = marker.exists() ? Number(marker.data().version ?? 1) : 0;
+  if (currentVersion >= CMS_SEED_VERSION) return false;
 
-  const [someProjects, someCities] = await Promise.all([
-    getDocs(query(collection(firebaseDb, "projects"), limit(1))),
-    getDocs(query(collection(firebaseDb, "cities"), limit(1))),
+  const [projectSnapshot, citySnapshot] = await Promise.all([
+    getDocs(collection(firebaseDb, "projects")),
+    getDocs(collection(firebaseDb, "cities")),
   ]);
   const batch = writeBatch(firebaseDb);
+  const projectIds = new Set(projectSnapshot.docs.map((document) => document.id));
+  const cityIds = new Set(citySnapshot.docs.map((document) => document.id));
+  let created = 0;
 
-  if (someProjects.empty && someCities.empty) {
-    seedCmsCities.forEach((city) => {
+  seedCmsCities.forEach((city) => {
+    if (!cityIds.has(city.id)) {
       batch.set(doc(firebaseDb, "cities", city.id), cityPayload(city, uid, serverTimestamp()));
-    });
-    seedCmsProjects.forEach((project) => {
+      created += 1;
+    }
+  });
+  seedCmsProjects.forEach((project) => {
+    if (!projectIds.has(project.id)) {
       batch.set(doc(firebaseDb, "projects", project.id), projectPayload(project, uid, serverTimestamp()));
-    });
-  }
+      created += 1;
+    }
+  });
 
   batch.set(markerRef, {
     initialized: true,
+    version: CMS_SEED_VERSION,
     initializedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     updatedBy: uid,
-  });
+  }, { merge: true });
   await batch.commit();
-  return someProjects.empty && someCities.empty;
+  return created > 0;
 }
 

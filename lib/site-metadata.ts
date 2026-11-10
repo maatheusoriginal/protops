@@ -4,7 +4,7 @@ import { getPublicCmsCity, getPublicCmsProject } from "@/lib/firebase/public-dat
 import { getCity, getProject } from "@/lib/site-data";
 import { getCopy, getHtmlLang, getLocalizedCity, getLocalizedProject, languageOptions, localePath, type Locale } from "@/lib/i18n";
 
-const origin = "https://protops-empreendimentos.cpcley-100.chatgpt.site";
+const origin = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://protops.vercel.app").replace(/\/$/, "");
 
 function alternates(locale: Locale, path: string) {
   return {
@@ -19,6 +19,12 @@ export function homeMetadata(locale: Locale): Metadata {
     title: locale === "pt" ? "Pro-Tops Empreendimentos" : "Pro-Tops Real Estate Developments",
     description: copy.home.heroCopy,
     alternates: alternates(locale, "/"),
+    openGraph: {
+      title: locale === "pt" ? "Pro-Tops Empreendimentos" : "Pro-Tops Real Estate Developments",
+      description: copy.home.heroCopy,
+      url: localePath(locale, "/"),
+      images: [{ url: "/media/golden-village.webp", alt: "Pro-Tops Empreendimentos" }],
+    },
   };
 }
 
@@ -32,6 +38,12 @@ export async function cityMetadata(locale: Locale, citySlug: string): Promise<Me
     title: `${labels[locale]} ${localizedCity.name}`,
     description: localizedCity.intro,
     alternates: alternates(locale, `/${localizedCity.slug}`),
+    openGraph: {
+      title: `${labels[locale]} ${localizedCity.name}`,
+      description: localizedCity.intro,
+      url: localePath(locale, `/${localizedCity.slug}`),
+      images: [{ url: localizedCity.image, alt: localizedCity.name }],
+    },
   };
 }
 
@@ -46,6 +58,12 @@ export async function projectMetadata(locale: Locale, citySlug: string, projectS
     title: localizedProject.name,
     description: localizedProject.summary,
     alternates: alternates(locale, `/${localizedCity.slug}/${localizedProject.slug}`),
+    openGraph: {
+      title: localizedProject.name,
+      description: localizedProject.summary,
+      url: localePath(locale, `/${localizedCity.slug}/${localizedProject.slug}`),
+      images: [{ url: localizedProject.image, alt: localizedProject.name }],
+    },
   };
 }
 
@@ -55,6 +73,12 @@ export function capitalMetadata(locale: Locale): Metadata {
     title: "Capital Partners",
     description: copy.capital.hero,
     alternates: alternates(locale, "/capital-partners"),
+    openGraph: {
+      title: "Pro-Tops Capital Partners",
+      description: copy.capital.hero,
+      url: localePath(locale, "/capital-partners"),
+      images: [{ url: "/media/golden-village.webp", alt: "Pro-Tops Capital Partners" }],
+    },
   };
 }
 

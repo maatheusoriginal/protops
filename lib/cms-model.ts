@@ -166,13 +166,16 @@ export function cmsCityToSiteCity(city: CmsCity, locale: Locale): City {
 
 export function cmsProjectToSiteProject(project: CmsProject, cityName: string, locale: Locale): Project {
   const fallback = project.translations.pt ?? { name: project.slug, summary: "", description: "" };
+  const bundledProject = projects.find((item) => item.city === project.citySlug && item.slug === project.slug);
+  const usesBundledHero = project.heroImage.startsWith("/media/");
+  const usesBundledGallery = project.gallery.length > 0 && project.gallery.every((image) => image.startsWith("/media/"));
   const base: Project = {
     slug: project.slug,
     name: fallback.name || project.slug,
     city: project.citySlug,
     label: project.category,
-    image: project.heroImage,
-    gallery: project.gallery,
+    image: usesBundledHero && bundledProject ? bundledProject.image : project.heroImage,
+    gallery: usesBundledGallery && bundledProject ? bundledProject.gallery : project.gallery,
     summary: fallback.summary,
     description: fallback.description,
     features: project.features,

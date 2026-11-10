@@ -88,9 +88,12 @@ CLOUDINARY_CLOUD_NAME
 CLOUDINARY_API_KEY
 CLOUDINARY_API_SECRET
 DEEPL_API_KEY
+NEXT_PUBLIC_SITE_URL
 ```
 
 As integrações de câmbio, CEP e mapa não exigem chave. Opcionalmente, `NOMINATIM_BASE_URL` permite trocar o servidor de geocodificação no futuro sem alterar o painel.
+
+`NEXT_PUBLIC_SITE_URL` é opcional e deve receber o domínio final, sem barra no fim, quando um domínio próprio for conectado. Sem essa variável, o site usa `https://protops.vercel.app` para links canônicos, compartilhamento e sitemap.
 
 O ViaCEP confirma logradouro, bairro, cidade e estado. Como bases gratuitas nem sempre possuem cada número de imóvel, o painel identifica quando o resultado corresponde apenas ao trecho da rua e permite arrastar o pino — ou tocar no mapa — até a posição exata do empreendimento.
 
@@ -139,7 +142,7 @@ public/media/                Logos, imagens WebP e vídeo otimizado
 
 ## Mídias
 
-O repositório contém as versões otimizadas utilizadas no site. Os arquivos brutos de drone permanecem no acervo original e não precisam ser incluídos no deploy.
+O repositório contém uma seleção otimizada em WebP para todos os empreendimentos, incluindo o Live. Os arquivos brutos de drone permanecem no acervo original e não precisam ser incluídos no deploy.
 
 ## Observação comercial
 

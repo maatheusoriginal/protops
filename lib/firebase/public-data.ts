@@ -1,5 +1,5 @@
 import { cache } from "react";
-import type { CmsCity, CmsProject } from "@/lib/cms-model";
+import { seedCmsProjects, type CmsCity, type CmsProject } from "@/lib/cms-model";
 import { firebaseConfig } from "@/lib/firebase/config";
 
 type FirestoreValue = {
@@ -79,7 +79,11 @@ export async function getPublicCmsCity(slug: string): Promise<CmsCity | null | u
 
 export async function getPublicCmsProjectsByCity(citySlug: string): Promise<CmsProject[] | undefined> {
   const projects = await getPublishedProjects();
-  return projects?.filter((project) => project.citySlug === citySlug) as unknown as CmsProject[] | undefined;
+  if (projects === undefined) return undefined;
+  const remoteProjects = projects.filter((project) => project.citySlug === citySlug) as unknown as CmsProject[];
+  const remoteIds = new Set(remoteProjects.map((project) => project.id));
+  const bundledProjects = seedCmsProjects.filter((project) => project.citySlug === citySlug && !remoteIds.has(project.id));
+  return [...remoteProjects, ...bundledProjects];
 }
 
 export async function getPublicCmsFeaturedProjects(): Promise<CmsProject[] | undefined> {
@@ -90,6 +94,8 @@ export async function getPublicCmsFeaturedProjects(): Promise<CmsProject[] | und
 export async function getPublicCmsProject(citySlug: string, slug: string): Promise<CmsProject | null | undefined> {
   const projects = await getPublishedProjects();
   if (projects === undefined) return undefined;
-  return (projects.find((project) => project.citySlug === citySlug && project.slug === slug) as unknown as CmsProject | undefined) ?? null;
+  const remoteProject = projects.find((project) => project.citySlug === citySlug && project.slug === slug) as unknown as CmsProject | undefined;
+  if (remoteProject) return remoteProject;
+  return seedCmsProjects.find((project) => project.citySlug === citySlug && project.slug === slug) ?? null;
 }
 
